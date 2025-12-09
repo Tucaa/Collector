@@ -1,10 +1,16 @@
 (ns collector
   (:gen-class)
   (:require [clojure.java.io :as io])
-  (:import [io.pkts Pcap]
-           [io.pkts.packet Packet]
-           [io.pkts.buffer Buffer]
-           [io.pkts.protocol Protocol]))
+  (:import (java.util Base64)))
+
+;Konvertovanje bajtova u hexadecimalni string
+(defn convert_bytes_hex [array len]
+  (apply str (map #(format "%02x" %) (take len array))))
+
+;Konvertovanje bajtovau Base 64 string
+(defn convert_bytes_base64 [array len]
+  (let [encoder (Base64/getEncoder)]
+    (.encodeToString encoder (java.util.Arrays/copyOf range 0 len))))
 
 
 ;F-ja koja cita podatke iz pcap fajla (resiti import) za sada samo binarni format dok ne resis problem sa citanjem preko io.pkts
@@ -13,7 +19,9 @@
     (loop [buffer (byte-array 4096)]
       (let [n (.read in buffer)]
         (when (pos? n)
-          (println (String. buffer 0 n "ISO-8859-1"))
+          (println (str "Hexadecimal" convert_bytes_hex buffer n))
+          (println (str "Base64 " convert_bytes_base64 buffer n))
+          ;(println (String. buffer 0 n "ISO-8859-1"))
           (recur buffer))))))
 
 
