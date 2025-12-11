@@ -100,12 +100,63 @@
             numbers)))
 
 
+;Obicna rekurzija backa stack overflow kada se pozove sa velikim brojem
+(defn sum [n]
+  (if (zero? n)
+    0
+    (+ n (sum (dec n)))))
+
+
+
+;Testiranje loop /recur
+(defn sum_recur [n]
+  (loop [i n
+         acc 0]
+    (if (zero? i)
+      acc
+      (recur (dec i) (+ acc i)))))
+
+(defn fib [n]
+  ;Uslov ako se stavi 1 ili 0
+  (cond
+    (= n 0) '[0]
+    (= n 1) '[0 1]
+    :else
+    (loop [acc 2 ; Brojac stavljen na 2 posto se krece od 2 ako je usa u ovaj uslov
+            x-1 0 ; Prethodni broj
+            x 1 ; Trenutni broj
+            vec [0 1]]
+      (if (> acc n)
+        ;Konvertovanje vektora u listu
+        (seq vec)
+        (recur (inc acc) x (+ x-1 x)(conj vec (+ x-1 x)))))))
+
+(defn pos_test
+  ([] (pos_test 1))
+  ([n] (lazy-seq (cons n (pos_test (inc n))))))
+
+
+(defn fib_lazy
+  ;Iniciijalizuje se prazna sekvenca
+  ([] (fib_lazy 0 1))
+  ([x, y] (lazy-seq (cons x (fib_lazy y (+ x y))))))
+
+
+
 (defn -main
   [& args]
 
   (let [test (pwd_f (map plusminus (read-lines (safe-slurp "src/test.txt"))))]
     (if test
       (println "Uspesno provaljena sifra:\n" test)
-      (println "Niije ucitao fajl"))))
+      (println "Niije ucitao fajl")))
+
+  (println "Testiranje sumiranja"(sum_recur 5))
+  (println "Fibonaci recur" (fib 5))
+  (println "Testiranje lazy seq"(take 5 (pos_test)))
+  (println "Fibonaci lazy"(take 5 (fib_lazy)))
+  )
+
+
 
 
