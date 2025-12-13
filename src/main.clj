@@ -143,6 +143,62 @@
 
 
 
+;Funkcije viseg reda koje priamju druge funkcije kao arugmente
+(defn f[sf s1 s2]
+  (map (fn [f a1 a2]
+         (f a1 a2)
+         sf s1 s2)))
+
+(defn f2[sf s1 s2]
+  (for [f sf
+            a1 s1
+            a2 s2]
+    (sf a1 a2)))
+
+(f2 [+ / * -][1 2 3 4 5][10 5 7 15 20])
+(f1 [+ / * -][1 2 3 4 5][10 5 7 15 20])
+
+
+;Ispravi ovu ssintaksu
+(defn g [x y]
+  (if (odd? x)
+    (fn [x y]
+      (+ 3 (* x y)))
+    +))
+
+;Ispravi sintaksnu gresku
+(defn g [x y]
+  (if (odd? x)
+    (fn [x z]
+      (+ 3 (* x y)))
+    +))
+
+;Probati ispravi sintaksne greske i uradi ovo (funckija g1 ne mora da zna da ju je napravila g)
+; Fja g1 se pravi unutar funkcije g
+(def g1 (g 3 6))
+(def g1 10 20)
+
+
+
+(defn my-map [f seq]
+  (reduce
+    (fn [acc e]
+      (conj acc (f e)))
+    []
+    seq))
+
+
+
+(defn my_filter [f seq]
+  (reduce
+    (fn [acc e]
+      (if (f e)
+        (conj acc e)
+        acc))
+    []
+    seq))
+
+
 (defn -main
   [& args]
 

@@ -73,6 +73,75 @@
                                          (bit-and (aget data 13) 0xFF)))
      :payload (java.util.Arrays/copyOfRange data 14 (alength data))}))
 
+;Parsiranje IP sloja
+(defn parse_ip [data]
+  (when (>= (alength data) 20)
+    (let [version (bit-shift-right (bit-and (aget data 0) 0xFF) 4)
+          ihl (bit-and (aget data 0) 0x0F)
+          header-len (* ihl 4)
+          protocol (bit-and (aget data 9) 0xFF)
+          ip_src (format "%d.%d.%d.%d"
+                         (bit-and (aget data 12) 0xFF)
+                         (bit-and (aget data 13) 0xFF)
+                         (bit-and (aget data 14) 0xFF)
+                         (bit-and (aget data 15) 0xFF))
+          ip_dst (format "%d.%d.%d.%d"
+                         (bit-and (aget data 16) 0xFF)
+                         (bit-and (aget data 17) 0xFF)
+                         (bit-and (aget data 18) 0xFF)
+                         (bit-and (aget data 19) 0xFF))]
+      {:version version
+       :protocol (case protocol
+                   1 "ICMP"
+                   6 "TCP"
+                   17 "UDP"
+                   (str "Unknown (" protocol ")"))
+       :ip_src ip_src
+       :ip_dst ip_dst
+       :payload (when (< header-len (alength data))
+                  (java.util.Arrays/copyOfRange data header-len (alength data)))})))
+
+
+;Ovde ce biti logika za parsiranje sFLow podataka
+(defn parse_inmon [data]
+
+  )
+
+;Ako se bude islo dublje iskoristiti metodu get-in
+(def comp_data {:ip_src [100 200 300 400] :proto [500 500 500]})
+
+;Smisli kako ces da radis agregaciju u loop recuru
+;Da li ces na primer ako agregiras po ip_src da pravis hash mapu {:ip_src(ali vrednost) [val1 val2 val3] pa da aggregiras posle to sa reduce
+;Ili ces odmah u loop recur to da regulises.
+;Trebace ti mapa sa parametrima za agregaciju  npr: {:ip_src [] :ip_dst [] :proto [] ......}
+;Definisi vremenski period agregacije (pisanje u fajl)
+;Pisanje u fajlu po definisanom rasporedu iz kofiguracije (mape za agregaciju)
+;Probaj comp f-ja
+
+
+(defn agg_byarg [arg data]
+  (let [kwkey (keyword arg)
+        value (get data kwkey)]
+    (if value
+      (reduce
+        (fn [acc i]
+          (+ acc i))
+        0
+        value)
+      0)))
+
+
+(defn my_filter [f seq]
+  (reduce
+    (fn [acc e]
+      (if (f e)
+        (conj acc e)
+        acc))
+    []
+    seq))
+
+
+
 ;Funkcija koja agregira tot_bytes i koja vraca counter i finalnu agregiranu vrednost
 (defn aggregate
   [data]
@@ -88,8 +157,7 @@
 ;Funkcija za konvertovanje vrednosti na osnovu definisane jedinice ('KB, MB, GB ...)
 ;Kasnije modifikovati da dinamicki pronalazi da li su ('KB, MB ili GB)
 ;Mapirati sa ovom f-jom
-(defn convert
-  [unit]
+(defn convert [unit]
   (let [base 1024]
     (case unit
       :KB (/ bytes base)
@@ -106,47 +174,62 @@
    {:src-ip "10.0.0.1"      :protocol :tcp :tot-bytes 2048}])
 
 
+;Agregirani podaci
+(def total_data [:tot_packets :tot_bytes])
 
 (defn -main
   [& args]
 
-  (def results  (aggregate test_data))
 
-  (println (str "Ulazni podaci: " test_data))
-  (println (str "Rezultati: " results))
+  (def test_agg (agg_byarg comp_data)
+  ;(def results  (aggregate test_data))
+
+  ;(println (str "Ulazni podaci: " test_data))
+  ;(println (str "Rezultati: " results))
   ;(def test_pcap (raw_file "D:/Milan/test.pcap"))
 
 
-  (def test_header (
-                    (with-open [arr (io/input-stream "D:/Milan/test2.pcap")]
-                      (if-let [header (parse_header_global arr)]
-                        (do
-                          (println "____GLOBALNI HEADER_____ ")
-                          (println (format "Verzija: %d" (:version_major header)))
-                          (println (format "Mreza: %d" (:network header)))
+  (def test_header
+    (with-open [arr (io/input-stream "D:/Milan/test.pcap")]
+      (if-let [header (parse_header_global arr)]
+        (do
+          (println "____GLOBALNI HEADER_____ ")
+          (println (format "Verzija: %d" (:version_major header)))
+          (println (format "Mreza: %d" (:network header)))
 
+          (println "_______PAKETI_______")
+          (loop [packet_num 1
+                 acc_packets 0
+                 acc_bytes 0]
+            ;Ovde dodati zavrsni uslov empty?
 
-                          (println "_______PAKETI_______")
-                          (loop [packet_num 1]
-                            (when-let [pkt_header (parse_header_packet arr (:byte_order header))]
-                              (let [packet_data (byte-array (:incl_len pkt_header))
-                                    n (.read arr packet_data)]
-                                (when (= n (:incl_len pkt_header))
-                                  (println (format "--- Packet #%d ---" packet_num))
-                                  (println (format "Timestamp: %d.%06d" (:ts_sec pkt_header) (:ts_usec pkt_header)))
-                                  (println (format "Duzina_paketa: %d bytes (captured: %d)"
-                                                   (:orig_len pkt_header) (:incl_len pkt_header)))
+            (if-let [pkt_header (parse_header_packet arr (:byt_order header))]
+              (let [packet_data (byte-array (:incl_len pkt_header))
+                    n (.read arr packet_data)
+                    new_packets (+ acc_packets (:orig_len pkt_header))]
 
-                          (println "_______Ethernet sloj______")
-                            (when-let [eth (parse_ethernet packet_data)]
-                              ;Nesto ne valja format treba
-                              (println (format "  Ethernet: %s -> %s (Type: %s)"
-                                               (.substring (:src_mac eth) 0 (dec (count (:src_mac eth))))
-                                               (.substring (:dst_mac eth) 0 (dec (count (:dst_mac eth))))
-                                               (:ethertype eth)))
+                (when (= n (:incl_len pkt_header))
 
-                              (recur (inc packet_num))))))))))))
-                       ;(def converted-kb (convert (:total-bytes results) :KB))
+                  (println (format "--- Packet #%d ---" packet_num))
+                  (println (format "Timestamp: %d.%06d" (:ts_sec pkt_header) (:ts_usec pkt_header)))
+                  (println (format "Duzina_paketa: %d bytes (captured: %d)"
+                                   (:orig_len pkt_header) (:incl_len pkt_header)))
 
-  ;(println (str "Konvertovana vrednost (KB): " converted-kb)))
+                  (println "_______Ethernet sloj______")
+                  (when-let [eth (parse_ethernet packet_data)]
+                    (println (format "  Ethernet: %s -> %s (Type: %s)"
+                                     (.substring (:src_mac eth) 0 (dec (count (:src_mac eth))))
+                                     (.substring (:dst_mac eth) 0 (dec (count (:dst_mac eth))))
+                                     (:ethertype eth)))
+
+                    (println "_______IP SLOJ______")
+                    (when (= (:ethertype eth) "0x0800")
+                      (when-let [ip (parse_ip (:payload eth))]
+                        (println (format "  IP: %s -> %s (Protocol: %s)"
+                                         (:ip_src ip) (:ip_dst ip) (:protocol ip))))))
+                  (println (format "Ukupno paketa %d" new_packets))
+
+                  (recur (inc packet_num) new_packets acc_bytes)))
+              (println "Kraj fajla ili nevalidan paket." acc_packets)))))))
+
   )
